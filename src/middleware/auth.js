@@ -12,7 +12,8 @@ function auth(req, res, next) {
     const payload = verifyToken(token);
     req.user = { userId: payload.sub, email: payload.email, roles: payload.roles || [] };
     next();
-  } catch {
+  } catch (err) {
+    console.error(`[auth] 401 on ${req.method} ${req.path}: ${err.message}`);
     return res.status(401).json({ error: 'Invalid or expired token' });
   }
 }
