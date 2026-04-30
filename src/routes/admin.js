@@ -7,9 +7,14 @@ const Message = require('../models/Message');
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
 
+const EMAIL_ERROR = 'User IDs must be used, not email addresses. Please use the user\'s ID instead of their email.'
+
 // GET /admin/messages — list all messages with optional filters
 router.get('/messages', requireAdmin, async (req, res) => {
   const { senderId, recipientId, page = 1, limit = DEFAULT_LIMIT } = req.query;
+
+  if (senderId    && senderId.includes('@'))    return res.status(400).json({ error: EMAIL_ERROR });
+  if (recipientId && recipientId.includes('@')) return res.status(400).json({ error: EMAIL_ERROR });
 
   const filter = {};
   if (senderId)    filter.senderId    = senderId;

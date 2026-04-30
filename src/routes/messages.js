@@ -7,6 +7,12 @@ const Message = require('../models/Message');
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
 
+const EMAIL_ERROR = 'User IDs must be used, not email addresses. Please use the user\'s ID instead of their email.'
+
+function containsEmail(value) {
+  return typeof value === 'string' && value.includes('@');
+}
+
 function parsePagination(query) {
   const page  = Math.max(1, parseInt(query.page)  || 1);
   const limit = Math.min(MAX_LIMIT, Math.max(1, parseInt(query.limit) || DEFAULT_LIMIT));
@@ -18,6 +24,9 @@ router.post('/', auth, async (req, res) => {
   const { recipientId, body } = req.body;
   if (!recipientId || !body) {
     return res.status(400).json({ error: '"recipientId" and "body" are required' });
+  }
+  if (containsEmail(recipientId)) {
+    return res.status(400).json({ error: EMAIL_ERROR });
   }
 
   const message = await Message.create({
@@ -78,6 +87,10 @@ router.get('/conversation/:userId', auth, async (req, res) => {
   const me    = req.user.userId;
   const other = req.params.userId;
 
+  if (containsEmail(other)) {
+    return res.status(400).json({ error: EMAIL_ERROR });
+  }
+
   const filter = {
     $or: [
       { senderId: me,    recipientId: other, deletedBySender:    false },
@@ -110,6 +123,7 @@ router.patch('/:id/read', auth, async (req, res) => {
 router.patch('/read-all', auth, async (req, res) => {
   const { senderId } = req.body;
   if (!senderId) return res.status(400).json({ error: '"senderId" is required' });
+  if (containsEmail(senderId)) return res.status(400).json({ error: EMAIL_ERROR });
 
   const result = await Message.updateMany(
     { recipientId: req.user.userId, senderId, readAt: null },
