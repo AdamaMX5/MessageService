@@ -1,29 +1,21 @@
 const express = require('express');
 const { refreshPublicKey } = require('./services/jwtService');
 const requireAdmin = require('./middleware/requireAdmin');
+const asyncHandler = require('./utils/asyncHandler');
 const messagesRouter = require('./routes/messages');
+const channelsRouter = require('./routes/channels');
 const adminRouter = require('./routes/admin');
 
 const app = express();
 
-// Request logging middleware
+// Request logging middleware — logs once per request, on completion.
+// We log the path only (not the query string) to keep user ids out of the logs.
 app.use((req, res, next) => {
   const start = Date.now();
-  const originalSend = res.send;
-  
-  res.send = function(body) {
-    const duration = Date.now() - start;
-    console.log(`${new Date().toISOString()} - ${req.method} ${req.originalUrl} - ${res.statusCode} - ${duration}ms`);
-    return originalSend.call(this, body);
-  };
-  
-  // Log when response is finished
   res.on('finish', () => {
     const duration = Date.now() - start;
-    console.log(`${new Date().toISOString()} - ${req.method} ${req.originalUrl} - ${res.statusCode} - ${duration}ms`);
+    console.log(`${new Date().toISOString()} - ${req.method} ${req.path} - ${res.statusCode} - ${duration}ms`);
   });
-  
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.originalUrl} - Request received from ${req.ip}`);
   next();
 });
 
@@ -38,12 +30,13 @@ app.get('/health', (req, res) => {
 });
 
 // Force-refresh the cached JWT public key after key rotation
-app.post('/refresh-key', requireAdmin, async (req, res) => {
+app.post('/refresh-key', requireAdmin, asyncHandler(async (req, res) => {
   await refreshPublicKey();
   res.json({ refreshed: true });
-});
+}));
 
 app.use('/messages', messagesRouter);
+app.use('/channels', channelsRouter);
 app.use('/admin', adminRouter);
 
 // Central error handler — keeps stack traces out of API responses

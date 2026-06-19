@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 
 const requireAdmin = require('../middleware/requireAdmin');
+const asyncHandler = require('../utils/asyncHandler');
 const Message = require('../models/Message');
 
 const DEFAULT_LIMIT = 20;
@@ -9,10 +10,19 @@ const MAX_LIMIT = 100;
 
 const EMAIL_ERROR = 'User IDs must be used, not email addresses. Please use the user\'s ID instead of their email.'
 
+// Query params may arrive as objects (e.g. ?senderId[$ne]=) — reject non-strings
+// so they never reach the Mongo filter.
+function invalidId(value) {
+  return value !== undefined && typeof value !== 'string';
+}
+
 // GET /admin/messages — list all messages with optional filters
-router.get('/messages', requireAdmin, async (req, res) => {
+router.get('/messages', requireAdmin, asyncHandler(async (req, res) => {
   const { senderId, recipientId, page = 1, limit = DEFAULT_LIMIT } = req.query;
 
+  if (invalidId(senderId) || invalidId(recipientId)) {
+    return res.status(400).json({ error: '"senderId" and "recipientId" must be strings' });
+  }
   if (senderId    && senderId.includes('@'))    return res.status(400).json({ error: EMAIL_ERROR });
   if (recipientId && recipientId.includes('@')) return res.status(400).json({ error: EMAIL_ERROR });
 
@@ -29,13 +39,13 @@ router.get('/messages', requireAdmin, async (req, res) => {
   ]);
 
   res.json({ total, page: Number(page), limit: cappedLimit, messages });
-});
+}));
 
 // DELETE /admin/messages/:id — hard-delete any message
-router.delete('/messages/:id', requireAdmin, async (req, res) => {
+router.delete('/messages/:id', requireAdmin, asyncHandler(async (req, res) => {
   const message = await Message.findByIdAndDelete(req.params.id);
   if (!message) return res.status(404).json({ error: 'Message not found' });
   res.json({ deleted: true });
-});
+}));
 
 module.exports = router;

@@ -7,7 +7,6 @@ async function fetchPublicKey() {
   const url = `${process.env.AUTH_URL}/jwt/public-key`;
   console.log(`[jwtService] Fetching public key from ${url}`);
   const { data } = await axios.get(url);
-  console.log(`[jwtService] Raw response keys: ${Object.keys(data).join(', ')}`);
 
   // AuthService returns { status, algorithm, public_key }
   if (typeof data === 'string') {
@@ -17,11 +16,12 @@ async function fetchPublicKey() {
   } else if (data.publicKey) {
     cachedPublicKey = data.publicKey;
   } else {
-    console.error('[jwtService] Unexpected public key response:', JSON.stringify(data));
+    // Log only the shape, never the payload, of an unexpected response.
+    console.error(`[jwtService] Unexpected public key response shape: ${Object.keys(data).join(', ')}`);
     throw new Error('Could not extract public key from AuthService response');
   }
 
-  console.log(`[jwtService] Public key loaded (first 60 chars): ${cachedPublicKey.slice(0, 60)}`);
+  console.log('[jwtService] Public key loaded');
   return cachedPublicKey;
 }
 
@@ -42,8 +42,8 @@ function verifyToken(token) {
     throw new Error('Public key not loaded yet');
   }
   try {
-    const decoded = jwt.decode(token, { complete: true });
-    console.log(`[jwtService] Verifying token — alg: ${decoded?.header?.alg}, sub: ${decoded?.payload?.sub}, exp: ${decoded?.payload?.exp ? new Date(decoded.payload.exp * 1000).toISOString() : 'n/a'}`);
+    // Algorithm is pinned to RS256 to prevent alg-confusion (e.g. alg:none / HS256).
+    // We never log decoded claims — `sub` and friends are sensitive at request volume.
     return jwt.verify(token, cachedPublicKey, { algorithms: ['RS256'] });
   } catch (err) {
     console.error(`[jwtService] Token verification failed: ${err.message}`);

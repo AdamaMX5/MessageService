@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 
 const auth = require('../middleware/auth');
+const asyncHandler = require('../utils/asyncHandler');
 const Message = require('../models/Message');
 
 const DEFAULT_LIMIT = 20;
@@ -13,6 +14,12 @@ function containsEmail(value) {
   return typeof value === 'string' && value.includes('@');
 }
 
+// Rejects non-string ids/bodies before they reach a query — closes the NoSQL
+// operator-injection surface (e.g. { "$ne": null }) on user-supplied fields.
+function isNonEmptyString(value) {
+  return typeof value === 'string' && value.length > 0;
+}
+
 function parsePagination(query) {
   const page  = Math.max(1, parseInt(query.page)  || 1);
   const limit = Math.min(MAX_LIMIT, Math.max(1, parseInt(query.limit) || DEFAULT_LIMIT));
@@ -20,9 +27,9 @@ function parsePagination(query) {
 }
 
 // POST /messages — send a message
-router.post('/', auth, async (req, res) => {
+router.post('/', auth, asyncHandler(async (req, res) => {
   const { recipientId, body } = req.body;
-  if (!recipientId || !body) {
+  if (!isNonEmptyString(recipientId) || !isNonEmptyString(body)) {
     return res.status(400).json({ error: '"recipientId" and "body" are required' });
   }
   if (containsEmail(recipientId)) {
@@ -36,22 +43,22 @@ router.post('/', auth, async (req, res) => {
   });
 
   res.status(201).json(message);
-});
+}));
 
 // GET /messages/unread-count — number of unread messages for the authenticated user
 // Kept as a dedicated, index-backed query because it is called on every client startup
 // and after every notification event from the PresenceService.
-router.get('/unread-count', auth, async (req, res) => {
+router.get('/unread-count', auth, asyncHandler(async (req, res) => {
   const count = await Message.countDocuments({
     recipientId: req.user.userId,
     readAt: null,
     deletedByRecipient: false,
   });
   res.json({ count });
-});
+}));
 
 // GET /messages/inbox — received messages, newest first
-router.get('/inbox', auth, async (req, res) => {
+router.get('/inbox', auth, asyncHandler(async (req, res) => {
   const { page, limit, skip } = parsePagination(req.query);
   const unreadOnly = req.query.unreadOnly === 'true';
 
@@ -64,10 +71,10 @@ router.get('/inbox', auth, async (req, res) => {
   ]);
 
   res.json({ total, page, limit, messages });
-});
+}));
 
 // GET /messages/sent — sent messages, newest first
-router.get('/sent', auth, async (req, res) => {
+router.get('/sent', auth, asyncHandler(async (req, res) => {
   const { page, limit, skip } = parsePagination(req.query);
 
   const filter = { senderId: req.user.userId, deletedBySender: false };
@@ -78,11 +85,11 @@ router.get('/sent', auth, async (req, res) => {
   ]);
 
   res.json({ total, page, limit, messages });
-});
+}));
 
 // GET /messages/conversation/:userId — all messages between the caller and a specific user,
 // in both directions, sorted chronologically (oldest first).
-router.get('/conversation/:userId', auth, async (req, res) => {
+router.get('/conversation/:userId', auth, asyncHandler(async (req, res) => {
   const { page, limit, skip } = parsePagination(req.query);
   const me    = req.user.userId;
   const other = req.params.userId;
@@ -104,10 +111,10 @@ router.get('/conversation/:userId', auth, async (req, res) => {
   ]);
 
   res.json({ total, page, limit, messages });
-});
+}));
 
 // PATCH /messages/:id/read — mark a single message as read (recipient only)
-router.patch('/:id/read', auth, async (req, res) => {
+router.patch('/:id/read', auth, asyncHandler(async (req, res) => {
   const message = await Message.findById(req.params.id);
   if (!message) return res.status(404).json({ error: 'Message not found' });
   if (message.recipientId !== req.user.userId) {
@@ -117,12 +124,12 @@ router.patch('/:id/read', auth, async (req, res) => {
   message.readAt = message.readAt || new Date();
   await message.save();
   res.json(message);
-});
+}));
 
 // PATCH /messages/read-all — mark all messages from a sender as read
-router.patch('/read-all', auth, async (req, res) => {
+router.patch('/read-all', auth, asyncHandler(async (req, res) => {
   const { senderId } = req.body;
-  if (!senderId) return res.status(400).json({ error: '"senderId" is required' });
+  if (!isNonEmptyString(senderId)) return res.status(400).json({ error: '"senderId" is required' });
   if (containsEmail(senderId)) return res.status(400).json({ error: EMAIL_ERROR });
 
   const result = await Message.updateMany(
@@ -131,11 +138,11 @@ router.patch('/read-all', auth, async (req, res) => {
   );
 
   res.json({ updated: result.modifiedCount });
-});
+}));
 
 // DELETE /messages/:id — soft-delete a message (sender or recipient).
 // When both flags are set the document is hard-deleted immediately.
-router.delete('/:id', auth, async (req, res) => {
+router.delete('/:id', auth, asyncHandler(async (req, res) => {
   const message = await Message.findById(req.params.id);
   if (!message) return res.status(404).json({ error: 'Message not found' });
 
@@ -154,6 +161,6 @@ router.delete('/:id', auth, async (req, res) => {
 
   await message.save();
   res.json({ deleted: true });
-});
+}));
 
 module.exports = router;
