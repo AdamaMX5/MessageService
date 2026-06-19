@@ -3,10 +3,10 @@ const router = express.Router();
 
 const auth = require('../middleware/auth');
 const asyncHandler = require('../utils/asyncHandler');
+const parsePagination = require('../utils/pagination');
 const Message = require('../models/Message');
 
-const DEFAULT_LIMIT = 20;
-const MAX_LIMIT = 100;
+const PAGINATION = { defaultLimit: 20, maxLimit: 100 };
 
 const EMAIL_ERROR = 'User IDs must be used, not email addresses. Please use the user\'s ID instead of their email.'
 
@@ -18,12 +18,6 @@ function containsEmail(value) {
 // operator-injection surface (e.g. { "$ne": null }) on user-supplied fields.
 function isNonEmptyString(value) {
   return typeof value === 'string' && value.length > 0;
-}
-
-function parsePagination(query) {
-  const page  = Math.max(1, parseInt(query.page)  || 1);
-  const limit = Math.min(MAX_LIMIT, Math.max(1, parseInt(query.limit) || DEFAULT_LIMIT));
-  return { page, limit, skip: (page - 1) * limit };
 }
 
 // POST /messages — send a message
@@ -59,7 +53,7 @@ router.get('/unread-count', auth, asyncHandler(async (req, res) => {
 
 // GET /messages/inbox — received messages, newest first
 router.get('/inbox', auth, asyncHandler(async (req, res) => {
-  const { page, limit, skip } = parsePagination(req.query);
+  const { page, limit, skip } = parsePagination(req.query, PAGINATION);
   const unreadOnly = req.query.unreadOnly === 'true';
 
   const filter = { recipientId: req.user.userId, deletedByRecipient: false };
@@ -75,7 +69,7 @@ router.get('/inbox', auth, asyncHandler(async (req, res) => {
 
 // GET /messages/sent — sent messages, newest first
 router.get('/sent', auth, asyncHandler(async (req, res) => {
-  const { page, limit, skip } = parsePagination(req.query);
+  const { page, limit, skip } = parsePagination(req.query, PAGINATION);
 
   const filter = { senderId: req.user.userId, deletedBySender: false };
 
@@ -90,7 +84,7 @@ router.get('/sent', auth, asyncHandler(async (req, res) => {
 // GET /messages/conversation/:userId — all messages between the caller and a specific user,
 // in both directions, sorted chronologically (oldest first).
 router.get('/conversation/:userId', auth, asyncHandler(async (req, res) => {
-  const { page, limit, skip } = parsePagination(req.query);
+  const { page, limit, skip } = parsePagination(req.query, PAGINATION);
   const me    = req.user.userId;
   const other = req.params.userId;
 

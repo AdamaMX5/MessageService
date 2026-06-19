@@ -4,17 +4,11 @@ const router = express.Router();
 const auth = require('../middleware/auth');
 const requireChannelMembership = require('../middleware/requireChannelMembership');
 const asyncHandler = require('../utils/asyncHandler');
+const parsePagination = require('../utils/pagination');
 const ChannelMessage = require('../models/ChannelMessage');
 
-const DEFAULT_LIMIT = 100;
-const MAX_LIMIT = 100;
+const PAGINATION = { defaultLimit: 100, maxLimit: 100 };
 const MAX_BODY_LENGTH = 5000; // mirrors the ChannelMessage schema cap
-
-function parsePagination(query) {
-  const page  = Math.max(1, parseInt(query.page)  || 1);
-  const limit = Math.min(MAX_LIMIT, Math.max(1, parseInt(query.limit) || DEFAULT_LIMIT));
-  return { page, limit, skip: (page - 1) * limit };
-}
 
 // POST /channels/:channelId/messages — post a message to a channel (members only)
 router.post('/:channelId/messages', auth, requireChannelMembership, asyncHandler(async (req, res) => {
@@ -38,7 +32,7 @@ router.post('/:channelId/messages', auth, requireChannelMembership, asyncHandler
 // GET /channels/:channelId/messages?page&limit — list channel messages (members only),
 // newest first. Consistent with /messages/inbox; default & max limit 100.
 router.get('/:channelId/messages', auth, requireChannelMembership, asyncHandler(async (req, res) => {
-  const { page, limit, skip } = parsePagination(req.query);
+  const { page, limit, skip } = parsePagination(req.query, PAGINATION);
   const filter = { channelId: req.params.channelId };
 
   const [messages, total] = await Promise.all([

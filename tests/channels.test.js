@@ -142,6 +142,17 @@ describe('POST /channels/:channelId/messages', () => {
     expect(ChannelMessage.create).not.toHaveBeenCalled();
   });
 
+  test('400 when channelId is malformed — no membership lookup performed', async () => {
+    const res = await request(app)
+      .post('/channels/bad%24id/messages') // "bad$id" — fails the channelId pattern
+      .set(authHeader())
+      .send({ body: 'hello' });
+
+    expect(res.status).toBe(400);
+    expect(isMember).not.toHaveBeenCalled();
+    expect(ChannelMessage.create).not.toHaveBeenCalled();
+  });
+
   test('401 when no token is provided', async () => {
     const res = await request(app)
       .post(`/channels/${CHANNEL_ID}/messages`)
