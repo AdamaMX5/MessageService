@@ -1,0 +1,2 @@
+bearbeite mit deinem AgentTeam https://github.com/AdamaMX5/MessageService/issues/1.pushe das Ergebnis automatisch
+  zu github. Prüfe auch deinen bestehenden Code mit den Agenten. update auch deine Service.md mit den neuen endpoints
